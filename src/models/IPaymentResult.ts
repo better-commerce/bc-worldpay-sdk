@@ -15,15 +15,15 @@ export interface IPaymentResult {
     outcome: TransactionOutcome;
     /** Raw Worldpay status (`paymentStatus` or `transStatus`). */
     gatewayStatus: string;
-    /** `cartId`, when Worldpay sends it back. */
-    cartId: string;
+    /** BetterCommerce order id (GUID), if present in the return URL. */
+    orderId: string;
+    orderNo: string;
+    paymentId: string;
     /** Amount reported by Worldpay, in major units (0 when absent). */
     amount: number;
     currency: string;
-    /** HTML redirect `orderKey`. */
-    orderKey: string;
-    /** Business Gateway `transId`. */
-    transId: string;
+    /** Worldpay order / transaction reference (`orderKey` or Worldpay `transId`). */
+    gatewayReference: string;
     authCode: string;
     cardType: string;
     /** True when the response was authenticated with the configured response secret. */

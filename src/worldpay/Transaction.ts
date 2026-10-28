@@ -6,6 +6,12 @@ import WorldpayEnvironment from "../base/config/WorldpayEnvironment";
 import { IHostedPaymentForm, IPaymentRequest, IPaymentResult, VerificationMethod } from "../models";
 import { hmacSha256, isAbsoluteUrl, md5, safeEqual, stringToBoolean } from "../utils/app-util";
 
+/** Query params added to the return URLs so the response can be matched to the BetterCommerce order. */
+const RETURN_PARAM_ORDER_ID = "bcOrderId";
+const RETURN_PARAM_PAYMENT_REF = "bcPaymentRef";
+
+const GUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Worldpay Hosted Payment Page (HTML redirect, `/wcc/purchase`).
  *
@@ -35,13 +41,13 @@ export default class Transaction implements ITransaction {
             if (!isAbsoluteUrl(action)) {
                 throw new Error("Worldpay payment page url is not configured.");
             }
-            if (!data?.cartId || !data?.currency || !Number.isFinite(amount) || amount <= 0) {
-                throw new Error("cartId, currency and a positive amount are required.");
+            if (!data?.orderId || !data?.orderNo || !data?.paymentId || !data?.currency || !Number.isFinite(amount) || amount <= 0) {
+                throw new Error("orderId, orderNo, paymentId, currency and a positive amount are required.");
             }
-            const successUrl = data.successUrl || extras.returnUrl || Defaults.String.Value;
-            if (!isAbsoluteUrl(successUrl)) {
-                throw new Error("An absolute Worldpay success url is required.");
-            }
+            const successUrl = tagReturnUrl(data, data.returnUrl || extras.returnUrl);
+            const callbackUrl = data.callbackUrl ? tagReturnUrl(data, data.callbackUrl) : successUrl;
+            // Legacy behaviour: the configured cancel url is suffixed with the order id.
+            const cancelUrl = data.cancelUrl || (isAbsoluteUrl(extras.cancelUrl) ? `${extras.cancelUrl}${data.orderId}` : Defaults.String.Value);
 
             const formattedAmount = amount.toFixed(2);
             const testMode = String(WorldpayEnvironment.getEnvironment() === "sandbox" ? TestMode.TEST : TestMode.LIVE);
@@ -49,7 +55,7 @@ export default class Transaction implements ITransaction {
 
             const fields: Record<string, string> = {
                 instId: installationId,
-                cartId: String(data.cartId),
+                cartId: String(data.orderNo),
                 amount: formattedAmount,
                 currency: data.currency,
                 testMode,
@@ -66,7 +72,7 @@ export default class Transaction implements ITransaction {
                 country: billing.countryCode || Defaults.String.Value,
                 tel: billing.phoneNo || Defaults.String.Value,
                 successURL: successUrl,
-                MC_callback: data.callbackUrl || successUrl,
+                MC_callback: callbackUrl,
             };
             const md5Secret = WorldpayEnvironment.getMd5Secret();
             if (md5Secret) {
@@ -75,7 +81,6 @@ export default class Transaction implements ITransaction {
             if (data.paymentType) {
                 fields.paymentType = data.paymentType;
             }
-            const cancelUrl = data.cancelUrl || extras.cancelUrl || Defaults.String.Value;
             if (isAbsoluteUrl(cancelUrl)) {
                 fields.returnURL = cancelUrl;
             }
@@ -123,6 +128,11 @@ export default class Transaction implements ITransaction {
                 message = "Worldpay response is not signed and verified responses are required.";
             }
 
+            // Legacy return URLs used `transId` (order GUID) and `orderId` (`orderNo-paymentId`).
+            const legacyOrderId = GUID_REGEX.test(params.transId || Defaults.String.Value) ? params.transId : Defaults.String.Value;
+            const paymentRef = params[RETURN_PARAM_PAYMENT_REF] || (/^\d+-.+$/.test(params.orderId || Defaults.String.Value) ? params.orderId : Defaults.String.Value);
+            const [refOrderNo, ...refPaymentId] = (paymentRef || Defaults.String.Value).split("-");
+
             const amount = params.paymentAmount
                 ? Number(params.paymentAmount) / 100
                 : Number(params.authAmount || params.amount || Defaults.Int.Value);
@@ -130,11 +140,12 @@ export default class Transaction implements ITransaction {
             const result: IPaymentResult = {
                 outcome,
                 gatewayStatus: paymentStatus || transStatus,
-                cartId: params.cartId || Defaults.String.Value,
+                orderId: params[RETURN_PARAM_ORDER_ID] || legacyOrderId,
+                orderNo: refOrderNo || params.cartId || Defaults.String.Value,
+                paymentId: refPaymentId.join("-"),
                 amount: Number.isFinite(amount) ? amount : Defaults.Int.Value,
                 currency: params.paymentCurrency || params.authCurrency || params.currency || Defaults.String.Value,
-                orderKey: params.orderKey || Defaults.String.Value,
-                transId: params.transId || Defaults.String.Value,
+                gatewayReference: params.orderKey || (legacyOrderId ? Defaults.String.Value : params.transId) || Defaults.String.Value,
                 authCode: params.rawAuthCode || params.authCode || Defaults.String.Value,
                 cardType: params.cardType || Defaults.String.Value,
                 isVerified,
@@ -147,6 +158,19 @@ export default class Transaction implements ITransaction {
             return { hasError: true, error: error?.message };
         }
     }
+}
+
+/**
+ * Adds the BetterCommerce order id and `orderNo-paymentId` reference to a return URL.
+ */
+const tagReturnUrl = (data: IPaymentRequest, url?: string): string => {
+    if (!isAbsoluteUrl(url || Defaults.String.Value)) {
+        throw new Error("An absolute Worldpay return url is required (returnUrl or extras.returnUrl).");
+    }
+    const result = new URL(url!);
+    result.searchParams.set(RETURN_PARAM_ORDER_ID, data.orderId);
+    result.searchParams.set(RETURN_PARAM_PAYMENT_REF, `${data.orderNo}-${data.paymentId}`);
+    return result.toString();
 }
 
 /**

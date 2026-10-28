@@ -41,31 +41,33 @@ Extras (all optional):
 
 ### Request Payment
 
-Builds the form the browser must POST (auto-submit) to Worldpay.
+Builds the form the browser must POST (auto-submit) to Worldpay for a BetterCommerce order payment. The order number is sent as `cartId`, and the return / callback URLs are tagged with `bcOrderId` and `bcPaymentRef=<orderNo>-<paymentId>`.
 
 ```
 const form = await new Transaction().request({
-    cartId: "1001",
+    orderId: "<order guid>",
+    orderNo: 1001,
+    paymentId: "<pending payment id>",
     amount: 12.30,
     currency: "GBP",
     description: "Order 1001",
     email: "jo@example.com",
     billingAddress: { firstName: "Jo", lastName: "Bloggs", address1: "1 High St", city: "Leeds", postCode: "LS1 1AA", countryCode: "GB" },
-    successUrl: "https://www.example.com/payment/worldpay/return?ref=1001",
-    callbackUrl: "https://www.example.com/payment/worldpay/notify?ref=1001",
+    returnUrl: "https://www.example.com/payment/worldpay/return",
+    callbackUrl: "https://www.example.com/payment/worldpay/notify",
     cancelUrl: "https://www.example.com/checkout",
 });
-// => { action: "https://secure.worldpay.com/wcc/purchase", method: "POST", fields: { instId, cartId, amount, currency, testMode, signature, ... } }
+// => { action: "https://secure.worldpay.com/wcc/purchase", method: "POST", fields: { instId, cartId, amount, currency, testMode, signature, successURL, MC_callback, ... } }
 ```
 
 ### Get Payment Details
 
-Parses the query / form fields of the shopper return or Payment Response.
+Parses the query / form fields of the shopper return or Payment Response, including the legacy return URL (`transId` = order id, `orderId` = `orderNo-paymentId`).
 
 ```
 const result = await new Transaction().getDetails(params);
-// => { outcome: "authorised" | "pending" | "cancelled" | "refused", gatewayStatus, cartId, amount, currency,
-//      orderKey, transId, authCode, cardType, isVerified, verificationMethod, message }
+// => { outcome: "authorised" | "pending" | "cancelled" | "refused", gatewayStatus, orderId, orderNo, paymentId,
+//      amount, currency, gatewayReference, authCode, cardType, isVerified, verificationMethod, message }
 ```
 
 A response that fails verification against a configured response secret is `refused`. Always check `amount` and `currency` against your order before recording the payment.

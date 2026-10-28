@@ -3,7 +3,7 @@ import { IPaymentRequest } from "../../models";
 export interface ITransaction {
 
     /**
-     * Builds the Hosted Payment Page form for a payment.
+     * Builds the Hosted Payment Page form for a BetterCommerce order payment.
      * @param data {IPaymentRequest}
      */
     request(data: IPaymentRequest): any;
