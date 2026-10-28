@@ -1,3 +1,2 @@
-tsc
+npm test
 npm publish --access public
-del /s *.js
