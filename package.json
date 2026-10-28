@@ -1,0 +1,30 @@
+{
+  "name": "bc-worldpay-sdk",
+  "version": "0.0.1",
+  "description": "BetterCommerce Worldpay Hosted Payment Page (HTML redirect) SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "npx tsc",
+    "test": "npx tsc && node --test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.2.4",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "bettercommerce",
+    "payments",
+    "worldpay-sdk"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com/better-commerce/bc-worldpay-sdk.git"
+  },
+  "author": "BetterCommerce",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ]
+}
